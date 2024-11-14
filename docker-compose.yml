@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:9-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: MARINA
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: clave1
+    volumes:
+      - $HOME/datos-postgressql:/var/lib/postgresql/data:rw
+      - ./Productos.sql:/docker-entrypoint-initdb.d/Productos.sql:ro
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 9091:8080
+    depends_on:
+      - postgres
+
+  apache:
+    build: ./apache
+    ports:
+      - 9092:80
+    restart: unless-stopped
+    depends_on:
+      - php
+      - postgres
+ 
+
+  php:
+    build: ./php
+    container_name: php
+    working_dir: /var/www/html
+    restart: unless-stopped
+    environment:
+      BBDD_CADENA_CONEXION: "pgsql:host=postgres;port=5432;dbname=MARINA"
+      BBDD_USUARIO: root
+      BBDD_CLAVE: clave1
+    expose:
+      - 80
+
+  fluentd:
+    build:
+      context: ./fluentd  
+    restart: always
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf  
+      - ./logs:/var/log/apache2
+    depends_on:
+      - apache
+
+  elasticsearch:
+    image: elasticsearch:7.17.0
+    restart: always
+    environment:
+      - discovery.type=single-node
+    ports:
+      - 9200:9200
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: kibana:7.10.1
+    restart: always
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
+
+volumes:
+  elasticsearch_data:
